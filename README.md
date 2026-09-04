@@ -20,7 +20,7 @@ Smartphone camera quality is a key differentiator for mobile brands, especially 
   - Document → sharpening filter for text clarity
   - Landscape → saturation/vibrance boost
 - **Group photo support** — background blur and enhancement now work for *all* detected faces, not just one
-- **Beauty filter** — automatic skin smoothing (bilateral filtering) and a subtle warm color tone applied to every detected face in portrait mode
+- **Beauty filter** — automatic skin smoothing (bilateral filtering) and a subtle warm color tone applied to every detected face in portrait mode, with 4 switchable styles (Natural, Soft Glow, Warm Tone, High Contrast)
 - **OCR text extraction** — when a document scene is detected, the app runs Tesseract OCR on the sharpened image and displays the extracted text with a "Copy Text" button
 - **Voice-controlled capture** — say "capture" or "take photo" and the browser's built-in speech recognition triggers the capture automatically (hands-free, no extra backend needed)
 - **Before/after comparison** shown side-by-side
@@ -41,8 +41,8 @@ Smartphone camera quality is a key differentiator for mobile brands, especially 
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/<your-username>/ai-camera-scene-detection.git
-cd ai-camera-scene-detection
+git clone https://github.com/Abhishek-Rai04/Ai-camera-scene-detection.git
+cd Ai-camera-scene-detection
 
 # 2. Install dependencies
 pip install -r requirements.txt
@@ -80,15 +80,3 @@ This approach is fast, fully offline, and mirrors a real constraint mobile manuf
 - Add user accounts to track detection history per device
 
 ## 📂 Project Structure
-
-```
-├── app.py                  # Flask backend (scene detection + enhancement + DB logging)
-├── templates/
-│   └── index.html          # Camera capture frontend
-├── requirements.txt        # Python dependencies
-└── README.md
-```
-
-## 📝 License
-
-This project is open-source and available for learning/demonstration purposes.
