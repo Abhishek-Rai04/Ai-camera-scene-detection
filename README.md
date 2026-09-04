@@ -80,3 +80,19 @@ This approach is fast, fully offline, and mirrors a real constraint mobile manuf
 - Add user accounts to track detection history per device
 
 ## 📂 Project Structure
+├── app.py                  # Flask backend (scene detection + enhancement + DB logging)
+├── templates/
+│   └── index.html          # Camera capture frontend
+├── requirements.txt        # Python dependencies
+├── demo_output.png         # Output screenshot
+└── README.md
+
+## 📷 Output Screenshot
+
+![App output showing portrait detection, beauty filter styles, and before/after comparison](output.jpeg)
+
+*Live demo: portrait scene detected, background blurred, beauty filter applied with switchable styles (Natural / Soft Glow / Warm Tone / High Contrast), and detection history logged below.*
+
+## 📝 License
+
+This project is open-source and available for learning/demonstration purposes.
