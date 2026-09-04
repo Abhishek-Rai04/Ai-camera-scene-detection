@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Camera Scene Detection & Enhancement</title>
+<style>
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: #111827;
+    color: #f3f4f6;
+    margin: 0;
+    padding: 16px;
+    text-align: center;
+  }
+  h1 { font-size: 1.3rem; margin-bottom: 4px; }
+  p.sub { color: #9ca3af; margin-top: 0; font-size: 0.9rem; }
+  video, canvas {
+    width: 100%;
+    max-width: 420px;
+    border-radius: 12px;
+    background: #000;
+  }
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 16px 0;
+  }
+  button {
+    border: none;
+    padding: 14px 24px;
+    font-size: 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  #captureBtn { background: #4f46e5; color: white; }
+  #captureBtn:active { background: #4338ca; }
+  #voiceBtn { background: #059669; color: white; }
+  #voiceBtn.listening { background: #dc2626; }
+  #voiceBtn:active { opacity: 0.85; }
+  .results {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 16px;
+  }
+  .results div.imgwrap { flex: 1; min-width: 150px; max-width: 300px; }
+  .results img { width: 100%; border-radius: 8px; }
+  .label { font-size: 0.85rem; color: #9ca3af; margin-bottom: 4px; }
+  .badge {
+    display: inline-block;
+    background: #059669;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    margin: 4px 4px;
+  }
+  .badge.secondary { background: #374151; }
+  .style-row {
+    display: none;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 12px 0;
+  }
+  .style-btn {
+    background: #374151;
+    color: #f3f4f6;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    border-radius: 20px;
+  }
+  .style-btn.active { background: #4f46e5; }
+  #ocrBox {
+    display: none;
+    max-width: 420px;
+    margin: 16px auto 0;
+    background: #1f2937;
+    border-radius: 8px;
+    padding: 12px;
+    text-align: left;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #ocrBox h4 { margin: 0 0 6px 0; font-size: 0.9rem; color: #9ca3af; }
+  #copyBtn {
+    margin-top: 8px;
+    background: #4b5563;
+    color: white;
+    padding: 6px 14px;
+    font-size: 0.8rem;
+  }
+  #history { text-align: left; max-width: 420px; margin: 20px auto 0; font-size: 0.85rem; color: #9ca3af; }
+  #history li { margin-bottom: 4px; }
+  #voiceStatus { font-size: 0.8rem; color: #9ca3af; min-height: 18px; }
+</style>
+</head>
+<body>
+  <h1>📸 AI Camera Scene Detection</h1>
+  <p class="sub">Detects the scene (portrait / low-light / document / landscape) and auto-enhances it — including beauty filter, group-photo support, and text extraction.</p>
+
+  <video id="video" autoplay playsinline></video>
+
+  <div class="btn-row">
+    <button id="captureBtn">Capture & Enhance</button>
+    <button id="voiceBtn">🎤 Voice Capture</button>
+  </div>
+  <div id="voiceStatus"></div>
+
+  <div id="badgeWrap"></div>
+
+  <div class="style-row" id="styleRow">
+    <button class="style-btn active" data-style="natural">Natural</button>
+    <button class="style-btn" data-style="soft_glow">Soft Glow</button>
+    <button class="style-btn" data-style="warm_tone">Warm Tone</button>
+    <button class="style-btn" data-style="high_contrast">High Contrast</button>
+  </div>
+
+  <div class="results">
+    <div class="imgwrap">
+      <div class="label">Original</div>
+      <img id="originalImg" style="display:none;">
+    </div>
+    <div class="imgwrap">
+      <div class="label">Enhanced</div>
+      <img id="enhancedImg" style="display:none;">
+    </div>
+  </div>
+
+  <div id="ocrBox">
+    <h4>📝 Extracted Text (OCR)</h4>
+    <div id="ocrText"></div>
+    <button id="copyBtn">Copy Text</button>
+  </div>
+
+  <h3 style="margin-top:24px;font-size:1rem;">Recent Detections</h3>
+  <ul id="history"></ul>
+
+<script>
+const video = document.getElementById('video');
+const captureBtn = document.getElementById('captureBtn');
+const voiceBtn = document.getElementById('voiceBtn');
+const voiceStatus = document.getElementById('voiceStatus');
+const originalImg = document.getElementById('originalImg');
+const enhancedImg = document.getElementById('enhancedImg');
+const badgeWrap = document.getElementById('badgeWrap');
+const historyList = document.getElementById('history');
+const ocrBox = document.getElementById('ocrBox');
+const ocrText = document.getElementById('ocrText');
+const copyBtn = document.getElementById('copyBtn');
+const styleRow = document.getElementById('styleRow');
+const styleButtons = document.querySelectorAll('.style-btn');
+
+let lastOriginalDataUrl = null;
+let currentStyle = 'natural';
+
+// Access camera (works on laptop webcam or phone browser camera)
+navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+  .then(stream => { video.srcObject = stream; })
+  .catch(err => {
+    // fallback to any available camera (e.g. laptop front cam)
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => { video.srcObject = stream; })
+      .catch(e => alert("Camera access denied or unavailable: " + e.message));
+  });
+
+async function captureAndEnhance() {
+  captureBtn.disabled = true;
+  captureBtn.textContent = "Processing...";
+
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+  try {
+    const res = await fetch('/process', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl, beauty_style: currentStyle })
+    });
+    const result = await res.json();
+
+    if (result.error) {
+      alert(result.error);
+    } else {
+      lastOriginalDataUrl = result.original;
+      originalImg.src = result.original;
+      enhancedImg.src = result.enhanced;
+      originalImg.style.display = 'block';
+      enhancedImg.style.display = 'block';
+
+      let badges = `<span class="badge">Detected scene: ${result.scene_type.replace('_',' ')}</span>`;
+      if (result.scene_type === 'portrait') {
+        badges += `<span class="badge secondary">${result.face_count} face${result.face_count === 1 ? '' : 's'} detected — beauty filter applied</span>`;
+        styleRow.style.display = 'flex';
+      } else {
+        styleRow.style.display = 'none';
+      }
+      badgeWrap.innerHTML = badges;
+
+      if (result.scene_type === 'document' && result.extracted_text) {
+        ocrBox.style.display = 'block';
+        ocrText.textContent = result.extracted_text;
+      } else {
+        ocrBox.style.display = 'none';
+      }
+
+      loadHistory();
+    }
+  } catch (e) {
+    alert("Error contacting server: " + e.message);
+  }
+
+  captureBtn.disabled = false;
+  captureBtn.textContent = "Capture & Enhance";
+}
+
+captureBtn.addEventListener('click', captureAndEnhance);
+
+// ---------- Beauty style switcher (re-applies a different style to the same captured photo) ----------
+styleButtons.forEach(btn => {
+  btn.addEventListener('click', async () => {
+    if (!lastOriginalDataUrl) return;
+    currentStyle = btn.dataset.style;
+    styleButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    btn.textContent = btn.textContent + '...';
+    try {
+      const res = await fetch('/restyle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: lastOriginalDataUrl, beauty_style: currentStyle })
+      });
+      const result = await res.json();
+      if (result.enhanced) {
+        enhancedImg.src = result.enhanced;
+      }
+    } catch (e) {
+      alert("Error applying style: " + e.message);
+    }
+    btn.textContent = btn.textContent.replace('...', '');
+  });
+});
+
+copyBtn.addEventListener('click', () => {
+  navigator.clipboard.writeText(ocrText.textContent);
+  copyBtn.textContent = "Copied!";
+  setTimeout(() => { copyBtn.textContent = "Copy Text"; }, 1500);
+});
+
+async function loadHistory() {
+  const res = await fetch('/history');
+  const rows = await res.json();
+  historyList.innerHTML = rows.map(r =>
+    `<li>${r.timestamp} — <b>${r.scene_type}</b>${r.face_count ? ` (${r.face_count} face${r.face_count === 1 ? '' : 's'})` : ''}</li>`
+  ).join('');
+}
+
+// ---------- Voice-controlled capture (Web Speech API, built into the browser) ----------
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let listening = false;
+
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = false;
+  recognition.lang = 'en-US';
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
+    voiceStatus.textContent = `Heard: "${transcript.trim()}"`;
+    if (transcript.includes('capture') || transcript.includes('take photo') || transcript.includes('click photo')) {
+      captureAndEnhance();
+    }
+  };
+
+  recognition.onerror = (e) => {
+    voiceStatus.textContent = `Voice error: ${e.error}`;
+    stopListening();
+  };
+
+  recognition.onend = () => {
+    if (listening) recognition.start(); // keep listening until user turns it off
+  };
+} else {
+  voiceBtn.disabled = true;
+  voiceBtn.title = "Voice recognition not supported in this browser";
+}
+
+function startListening() {
+  if (!recognition) return;
+  listening = true;
+  recognition.start();
+  voiceBtn.classList.add('listening');
+  voiceBtn.textContent = '🛑 Stop Listening';
+  voiceStatus.textContent = 'Listening... say "capture" to take a photo';
+}
+
+function stopListening() {
+  if (!recognition) return;
+  listening = false;
+  recognition.stop();
+  voiceBtn.classList.remove('listening');
+  voiceBtn.textContent = '🎤 Voice Capture';
+  voiceStatus.textContent = '';
+}
+
+voiceBtn.addEventListener('click', () => {
+  if (listening) stopListening();
+  else startListening();
+});
+
+loadHistory();
+</script>
+</body>
+</html>
